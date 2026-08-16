@@ -175,6 +175,10 @@ h2.sec:first-child{margin-top:2px;}
 
 /* ── すごろく探索 ── */
 .eqrow{display:flex;gap:8px;margin-bottom:8px;}
+.stick{position:sticky;top:0;z-index:6;background:var(--sumi);
+  margin:-12px -12px 0;padding:12px 12px 8px;
+  box-shadow:0 8px 10px -8px rgba(0,0,0,.75);}
+.stick h2.sec{margin-top:0;}
 .eqslot{flex:1;min-width:0;background:#191411;border:1px solid var(--line);border-radius:5px;padding:8px 9px;cursor:pointer;text-align:left;font-family:var(--gothic);color:var(--ink);}
 .eqslot.vacant{border-style:dashed;}
 .eqlbl{font-size:10px;letter-spacing:.16em;color:var(--dim);margin-bottom:5px;}
@@ -452,17 +456,17 @@ function grade(q){ return GRADES[gradeIdx(q)]; }
 const AREAS=[
   {id:"mori", n:"裏山の森",     elv:1, ei:0, len:12,skip:7, ehp:44, eatk:4, edef:2, boss:"森の主・大猪",      desc:"薪と獣。誰でも入れる。",
    tbl:{wood:34,leather:22,copper:20,coal:16,iron:8}},
-  {id:"kou",  n:"廃坑",         elv:2, ei:1, len:16,skip:13, ehp:77, eatk:6, edef:4, boss:"坑道の主・岩喰い",  desc:"打ち捨てられた坑道。鉄が眠る。",
+  {id:"kou",  n:"廃坑",         elv:2, ei:1, req:{a:"mori",n:2}, len:16,skip:13, ehp:77, eatk:6, edef:4, boss:"坑道の主・岩喰い",  desc:"打ち捨てられた坑道。鉄が眠る。",
    tbl:{iron:34,coal:30,copper:16,silver:12,leather:6,magic:2}},
-  {id:"dou",  n:"水晶洞窟",     elv:5, ei:2, len:20,skip:20, ehp:161,eatk:11,edef:9, boss:"洞窟の主・水晶竜",  desc:"魔力を帯びた鉱脈が走る。",
+  {id:"dou",  n:"水晶洞窟",     elv:5, ei:2, req:{a:"kou",n:3}, len:20,skip:20, ehp:161,eatk:11,edef:9, boss:"洞窟の主・水晶竜",  desc:"魔力を帯びた鉱脈が走る。",
    tbl:{silver:30,iron:24,coal:20,magic:17,gold:9}},
-  {id:"kazan",n:"火竜の巣",     elv:8, ei:3, len:25,skip:30,ehp:222,eatk:16,edef:12,boss:"火竜の女王",        desc:"熱気と鱗。命の保証はない。",
+  {id:"kazan",n:"火竜の巣",     elv:8, ei:3, req:{a:"dou",n:3}, len:25,skip:30,ehp:222,eatk:16,edef:12,boss:"火竜の女王",        desc:"熱気と鱗。命の保証はない。",
    tbl:{coal:26,iron:24,magic:20,gold:16,scale:14}},
-  {id:"iseki",n:"星降りの遺跡", elv:11,ei:4, len:30,skip:39,ehp:288,eatk:21,edef:16,boss:"星降りの守護者",    desc:"空から落ちた鉄が眠る場所。",
+  {id:"iseki",n:"星降りの遺跡", elv:11,ei:4, req:{a:"kazan",n:4}, len:30,skip:39,ehp:288,eatk:21,edef:16,boss:"星降りの守護者",    desc:"空から落ちた鉄が眠る場所。",
    tbl:{silver:32,magic:24,gold:22,star:14,rune:8}},
-  {id:"shin", n:"深淵の坑道",   elv:14,ei:5, len:36,skip:47,ehp:528,eatk:26,edef:29,boss:"深淵の主・黒鉄竜",  desc:"どこまでも下る縦坑。灯りが届かない。",
+  {id:"shin", n:"深淵の坑道",   elv:14,ei:5, req:{a:"iseki",n:4}, len:36,skip:47,ehp:528,eatk:26,edef:29,boss:"深淵の主・黒鉄竜",  desc:"どこまでも下る縦坑。灯りが届かない。",
    tbl:{magic:26,gold:24,scale:20,star:16,rune:8,silver:6}},
-  {id:"saidan",n:"天穹の祭壇",  elv:17,ei:6, len:42,skip:56,ehp:794,eatk:30,edef:43,boss:"天穹の守り手",      desc:"雲の上に据えられた石。神代の鉄が眠る。",
+  {id:"saidan",n:"天穹の祭壇",  elv:17,ei:6, req:{a:"shin",n:5}, len:42,skip:56,ehp:794,eatk:30,edef:43,boss:"天穹の守り手",      desc:"雲の上に据えられた石。神代の鉄が眠る。",
    tbl:{star:26,scale:22,gold:20,magic:18,rune:14}}
 ];
 const FOES={
@@ -502,7 +506,7 @@ const S={
   stockKind:"all", dexKind:"all",
   openGen:{1:true}, openSmelt:true, openEnh:true, enhKind:"all", sortStock:"grade", sortDex:"gen",
   hl:null, needMat:null, lastBuy:null, lastResult:null,
-  equip:{main:1,sub:2}, cleared:{}, run:null, lastRun:null,
+  equip:{main:1,sub:2}, cleared:{}, clears:{}, opened:{}, run:null, lastRun:null,
   kami:{tanjin:0,ninja:0,sword:0,katana:0,great:0}, tomo:null,
   confirmOn:true, combo:{},
   autoCfg:{on:true, route:"safe"},
@@ -556,6 +560,31 @@ function autoSave(force){
   const now=Date.now();
   if(!force&&now-lastSave<4000) return;
   lastSave=now; saveGame();
+}
+
+/* 狩場が開くかどうか。探索の熟練だけでなく、ひとつ前の狩場を何度も回ることを求める */
+const clearsOf=id=>S.clears[id]||0;
+function areaOpen(a){
+  if(S.eLv<a.elv) return false;
+  if(a.req&&clearsOf(a.req.a)<a.req.n) return false;
+  return true;
+}
+function areaLockText(a){
+  const t=[];
+  if(S.eLv<a.elv) t.push("探索Lv"+a.elv);
+  if(a.req&&clearsOf(a.req.a)<a.req.n)
+    t.push(AMAP[a.req.a].n+"を"+a.req.n+"度踏破（いま"+clearsOf(a.req.a)+"度）");
+  return t.join("　と　")+" で道が開ける";
+}
+/* 道が開いたときに一度だけ報せる */
+function noticeOpened(){
+  AREAS.forEach(a=>{
+    if(!a.req) return;
+    if(areaOpen(a)&&!S.opened[a.id]){
+      S.opened[a.id]=true;
+      toast("<b class='hot'>"+a.n+"</b> への道が開けた。","#ffd166");
+    }
+  });
 }
 
 const staminaMax=()=>130+S.up.larder*30+(S.rank-1)*8+(S.eLv-1)*18;
@@ -692,7 +721,7 @@ function sources(k){
   AREAS.forEach(a=>{
     if(a.tbl[k]===undefined) return;
     let t=0; for(const x in a.tbl) t+=a.tbl[x];
-    list.push({id:a.id,n:a.n,rate:Math.round(a.tbl[k]/t*100),elv:a.elv,open:S.eLv>=a.elv});
+    list.push({id:a.id,n:a.n,rate:Math.round(a.tbl[k]/t*100),elv:a.elv,open:areaOpen(a)});
   });
   list.sort((x,y)=>x.open!==y.open?(x.open?-1:1):y.rate-x.rate);
   return {areas:list, buy:MAT[k].buy>0?MAT[k].buy:0};
@@ -806,6 +835,7 @@ function strike(){
   F.scores.push(sc); F.hits++;
   F.hammer=1; F.flash=1; F.shake=Math.min(1,sc/100);
   F.msg=msg; F.msgT=.65; F.msgC=col;
+  sfxHammer(sc);
   spawnSparks(sc);
   if(F.hits>=F.need){ finishForge(); return; }
   F.speed*=1.075; F.heat=Math.max(0,F.heat-5);
@@ -1286,7 +1316,8 @@ function autoTick(){
 const ROUTE_LABEL={safe:"安全寄り",risk:"険しい寄り",alt:"交互"};
 function startRun(id){
   if(S.run) return;
-  const a=AMAP[id]; if(!a||S.eLv<a.elv) return;
+  const a=AMAP[id]; if(!a) return;
+  if(!areaOpen(a)){ toast("まだこの狩場へは行けない。","#e0645a"); return; }
   if(!equipped().main){ toast("主武器を装備してから出発してください。","#e0645a"); return; }
   if(S.stamina<a.skip){ toast("体力が足りない。少し鎚を振って待て。","#e0645a"); return; }
   S.run={area:id,len:a.len,pos:0,board:[{t:"start"}],skills:[],mats:{},gold:0,
@@ -1465,9 +1496,13 @@ function finishRun(cleared,mats,gold){
   for(const k in mats) S.mats[k]=(S.mats[k]||0)+mats[k];
   S.gold+=gold; S.stats.earned+=gold; S.stats.trips++;
   addExpE(Math.round((20+a.ei*20)*(cleared?1.3:0.5)));
-  if(cleared&&!S.cleared[R.area]){
-    S.cleared[R.area]=true;
-    toast("<b class='hot'>"+a.n+"の主を討った。</b>　早駆けができるようになった。","#ffd166");
+  if(cleared){
+    S.clears[R.area]=clearsOf(R.area)+1;
+    if(!S.cleared[R.area]){
+      S.cleared[R.area]=true;
+      toast("<b class='hot'>"+a.n+"の主を討った。</b>　早駆けができるようになった。","#ffd166");
+    }
+    noticeOpened();
   }
   S.lastRun={area:R.area,cleared:cleared,mats:mats,gold:gold,kills:R.kills,pos:R.pos,len:R.len,skip:false};
   toast(cleared?("<b>"+a.n+"</b> を踏破した。"):("<b>"+a.n+"</b> から引き返した。持ち帰りは半分。"),cleared?"#6fd48a":"#e0645a");
@@ -1477,6 +1512,7 @@ function finishRun(cleared,mats,gold){
 /* ── 早駆け（踏破後） ── */
 function skipRun(id,times){
   const a=AMAP[id];
+  if(!areaOpen(a)){ toast("まだこの狩場へは行けない。","#e0645a"); return; }
   if(!S.cleared[id]){ toast("まず主を討ってください。","#e0645a"); return; }
   let done=0; const mats={}; let gold=0;
   for(let i=0;i<times;i++){
@@ -1487,11 +1523,13 @@ function skipRun(id,times){
     const g=Math.round((40+a.ei*190)*(0.8+Math.random()*0.5));
     gold+=g; S.gold+=g; S.stats.earned+=g; S.stats.trips++;
     addExpE(Math.round((20+a.ei*20)*1.1));
+    S.clears[id]=clearsOf(id)+1;
     done++;
   }
   if(!done){ toast("体力が足りない。","#e0645a"); return; }
   S.lastRun={area:id,cleared:true,mats:mats,gold:gold,kills:0,pos:a.len-1,len:a.len,skip:true,runs:done};
   toast("<b>"+a.n+"</b> を "+done+"回 駆け抜けた。","#7fb7c9");
+  noticeOpened();
   render();
 }
 
@@ -1796,8 +1834,9 @@ function eqSlotHtml(slot){
 
 function viewCamp(){
   const cs=combatStats(), eff=effList();
-  let h='<h2 class="sec">支度</h2>';
-  h+='<div class="eqrow">'+eqSlotHtml("main")+eqSlotHtml("sub")+'</div>';
+  let h='<div class="stick"><h2 class="sec">支度</h2>'+
+    '<div class="eqrow" style="margin-bottom:0">'+eqSlotHtml("main")+eqSlotHtml("sub")+'</div></div>';
+  h+='<div style="height:10px"></div>';
   h+='<div class="card"><div class="row" style="text-align:center">'+
      '<div style="flex:1"><div class="mini">攻撃</div><div class="ttl hot">'+cs.atk+'</div></div>'+
      '<div style="flex:1"><div class="mini">防御</div><div class="ttl cool">'+cs.def+'</div></div>'+
@@ -1842,17 +1881,22 @@ function viewCamp(){
   h+='<h2 class="sec">狩場へ出る</h2>';
   h+='<div class="note" style="margin-bottom:10px">サイコロを振って進み、最後のマスで主と戦います。'+
      '三マスごとに道を選べます。主を討った狩場は、以後「早駆け」で盤面を省けます。'+
+     '<b>次の狩場は、探索の熟練だけでなく、ひとつ前の狩場を決まった回数踏破すると開きます。</b>'+
+     '早駆けの一回も踏破に数えます。'+
+     '<b>次の狩場は、探索の熟練だけでなく、ひとつ前の狩場を決まった回数踏破すると開きます。</b>'+
+     '早駆けの一回も踏破に数えます。'+
      '早駆けは素材の実入りこそ変わりませんが、宝箱や討伐がないぶん金はほとんど手に入りません。</div>';
-  const opened=AREAS.filter(a=>S.eLv>=a.elv).slice().reverse();
-  const closed=AREAS.filter(a=>S.eLv<a.elv);
+  const opened=AREAS.filter(areaOpen).slice().reverse();
+  const closed=AREAS.filter(a=>!areaOpen(a));
   opened.concat(closed).forEach(a=>{
-    const lk=S.eLv<a.elv, hl=(S.hl===a.id), cl=!!S.cleared[a.id];
+    const lk=!areaOpen(a), hl=(S.hl===a.id), cl=!!S.cleared[a.id];
     const need=a.skip;
     h+='<div class="card'+(lk?" locked":"")+(hl?" hl":"")+'">';
     h+='<div class="row"><div style="flex:1;min-width:0"><div class="ttl">'+a.n+
       (cl?'　<span class="tag" style="color:var(--ok);border-color:#2f5c3a">踏破</span>':'')+'</div>'+
-      '<div class="mini">'+(lk?("探索Lv"+a.elv+"で道が開ける"):a.desc)+'</div>'+
-      (lk?'':'<div class="mini">'+a.len+'マス　主 '+a.boss+'</div>')+'</div>'+
+      '<div class="mini">'+(lk?areaLockText(a):a.desc)+'</div>'+
+      (lk?'':'<div class="mini">'+a.len+'マス　主 '+a.boss+
+        (clearsOf(a.id)?('　踏破 '+clearsOf(a.id)+'度'):'')+'</div>')+'</div>'+
       '<button class="btn cool sm" data-act="run" data-id="'+a.id+'"'+((lk||S.stamina<need)?" disabled":"")+'>出発</button></div>';
     if(!lk){
       let tot=0; for(const x in a.tbl) tot+=a.tbl[x];
@@ -2313,6 +2357,60 @@ function hit(t,g,cut,dur){
   gn.gain.setValueAtTime(g,t); gn.gain.exponentialRampToValueAtTime(0.0001,t+dur);
   src.connect(f); f.connect(gn); gn.connect(SND.master); src.start(t); src.stop(t+dur+0.02);
 }
+/* 炉の低い唸り */
+function rumble(t,dur,g){
+  const ac=SND.ac; if(!ac) return;
+  const src=ac.createBufferSource(), gn=ac.createGain(), f=ac.createBiquadFilter();
+  src.buffer=SND.noise; src.loop=true;
+  f.type="lowpass"; f.frequency.value=150;
+  gn.gain.setValueAtTime(0.0001,t);
+  gn.gain.linearRampToValueAtTime(g,t+dur*0.3);
+  gn.gain.linearRampToValueAtTime(0.0001,t+dur);
+  src.connect(f); f.connect(gn); gn.connect(SND.master); src.start(t); src.stop(t+dur+0.05);
+}
+/* 火花が爆ぜる音。細い帯域のごく短い雑音 */
+function crackle(t,g){
+  const ac=SND.ac; if(!ac) return;
+  const src=ac.createBufferSource(), gn=ac.createGain(), f=ac.createBiquadFilter();
+  src.buffer=SND.noise; src.playbackRate.value=0.7+Math.random()*1.6;
+  f.type="bandpass"; f.frequency.value=1800+Math.random()*4200; f.Q.value=3+Math.random()*7;
+  const vol=(g||0.10)*(0.35+Math.random()*0.65), d=0.012+Math.random()*0.035;
+  gn.gain.setValueAtTime(vol,t);
+  gn.gain.exponentialRampToValueAtTime(0.0001,t+d);
+  src.connect(f); f.connect(gn); gn.connect(SND.master); src.start(t); src.stop(t+d+0.02);
+}
+/* 金属の余韻。倍音が整数比から外れるほど鐘らしくなる */
+function bell(t,freq,g,dur,type){
+  const ac=SND.ac; if(!ac) return;
+  const o=ac.createOscillator(), gn=ac.createGain();
+  o.type=type||"sine"; o.frequency.value=freq;
+  gn.gain.setValueAtTime(0.0001,t);
+  gn.gain.exponentialRampToValueAtTime(Math.max(0.0002,g),t+0.004);
+  gn.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(gn); gn.connect(SND.master); o.start(t); o.stop(t+dur+0.05);
+}
+/* 槌を打った音。会心がいちばん澄んで長く伸びる */
+function sfxHammer(sc){
+  const ac=SND.ac; if(!ac||!S.snd.on||ac.state!=="running") return;
+  const t=ac.currentTime+0.002;
+  if(sc>=100){
+    hit(t,0.30,11000,0.045);                       /* 打ち当たりの立ち上がり */
+    taiko(t,0.13);                                  /* 芯の重み */
+    [1,2.74,5.38,8.93,13.3].forEach((r,i)=>
+      bell(t,660*r,0.115/(1+i*0.85),2.2-i*0.32,i>2?"sine":"triangle"));
+    for(let i=0;i<10;i++) crackle(t+0.02+Math.random()*0.35,0.10);
+  }else if(sc>=55){
+    hit(t,0.20,7000,0.04);
+    taiko(t,0.11);
+    [1,2.74,5.38].forEach((r,i)=>bell(t,560*r,0.085/(1+i),0.85-i*0.2));
+    for(let i=0;i<5;i++) crackle(t+0.02+Math.random()*0.2,0.08);
+  }else{
+    hit(t,0.16,900,0.09);                           /* 鈍く沈んだ音 */
+    taiko(t,0.16);
+    bell(t,180,0.05,0.22,"triangle");
+  }
+}
+
 function taiko(t,g){
   const ac=SND.ac; if(!ac) return;
   const o=ac.createOscillator(), gn=ac.createGain();
@@ -2339,12 +2437,11 @@ const SCENES={
       pluck(t,midi(scaleNote(deg,1)),0.5,0.06,"square",-4);
     }
   }},
-  forge:{bpm:126,beat(k,t){
-    if(k%2===0) hit(t,0.035,7000,0.03);
-    if(k%8===0) taiko(t,0.18);
-    if(k%4===2) pluck(t,midi(scaleNote(0,0)),0.22,0.06,"sawtooth");
-    if([1,6,9,13].indexOf(k%16)>=0)
-      pluck(t,midi(scaleNote([0,2,4,1][(Math.random()*4)|0],1)),0.3,0.05,"triangle");
+  /* 鍛造中は曲を鳴らさない。炉の唸りと、爆ぜる火花だけ */
+  forge:{bpm:120,beat(k,t){
+    if(k%16===0) rumble(t,3.6,0.075);
+    const n=(Math.random()*3.2)|0;
+    for(let i=0;i<n;i++) crackle(t+Math.random()*0.12);
   }}
 };
 function wantScene(){
